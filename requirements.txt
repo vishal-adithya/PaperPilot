@@ -4,3 +4,4 @@ langchain-google-genai
 arxiv
 langchain-community
 langchain-experimental
+sentence-transformers
