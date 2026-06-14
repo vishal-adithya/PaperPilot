@@ -5,6 +5,7 @@ from typing_extensions import TypedDict
 from langgraph.graph.message import add_messages
 import os
 from langchain_google_genai import ChatGoogleGenerativeAI
+from IPython.display import Image, display
 
 from dotenv import load_dotenv
 load_dotenv()
@@ -16,7 +17,6 @@ class State(TypedDict):
     query: str
     fetched_papers: list[dict]
     fais_index: Any
-
 
 graph_builder = StateGraph(State)
 
@@ -34,7 +34,7 @@ def fetch_papers(state: State) -> State:
         papers.append({
             "title": result.title,
             "authors": [author.name for author in result.authors],
-            "summary": result.summary,
+            "abstract": result.summary,
             "url": result.pdf_url
         })
     return {**state, "fetched_papers": papers}
@@ -43,14 +43,14 @@ if __name__ == "__main__":
     graph_builder.add_node("fetch_papers", fetch_papers)
     graph_builder.add_edge(START, "fetch_papers")
     graph_builder.add_edge("fetch_papers", END)
-    
-    # Example query
-    initial_state = {"query": "machine learning in healthcare"}
-    
     graph = graph_builder.compile()
+
+    display(Image(graph.get_graph().draw_mermaid_png()))
+
     final_state = graph.invoke({
     "query": "llm grooming",
     "fetched_papers": [],
     "faiss_index": None
-})
+        })
+    
     print(final_state["fetched_papers"])
