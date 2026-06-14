@@ -1,4 +1,5 @@
 import arxiv
+from langchain_community.embeddings import HuggingFaceEmbeddings
 from langgraph.graph import StateGraph,START,END
 from typing import Annotated, Any
 from typing_extensions import TypedDict
@@ -6,6 +7,10 @@ from langgraph.graph.message import add_messages
 import os
 from langchain_google_genai import ChatGoogleGenerativeAI
 from IPython.display import Image, display
+
+from langchain_core.documents import Document
+from langchain_text_splitters import RecursiveCharacterTextSplitter
+from langchain_core.vectorstores import FAISS
 
 from dotenv import load_dotenv
 load_dotenv()
@@ -39,10 +44,41 @@ def fetch_papers(state: State) -> State:
         })
     return {**state, "fetched_papers": papers}
 
+def rag_pipeline(state: State) -> State:
+    
+    splitter = RecursiveCharacterTextSplitter(
+        chunk_size=500, 
+        chunk_overlap=100)
+    
+    embed = HuggingFaceEmbeddings(
+        model_name="sentence-transformers/all-MiniLM-L6-v2"
+        )
+    doc = [
+        Document(
+            page_content = p["abstract"],
+            metadata = {
+                "title": p["title"], 
+                "authors": p["authors"], 
+                "url": p["url"]
+                        })
+            for p in state["fetched_papers"]]
+    
+    chunks = splitter.split_documents(doc)
+    faiss = FAISS.from_documents(chunks, embed)
+    
+    return {**state, "faiss_index": faiss}
+    
+    
+
+
 if __name__ == "__main__":
     graph_builder.add_node("fetch_papers", fetch_papers)
+    graph_builder.add_node("RAG_pipeline", rag_pipeline)
+    
     graph_builder.add_edge(START, "fetch_papers")
-    graph_builder.add_edge("fetch_papers", END)
+    graph_builder.add_edge("fetch_papers", "RAG_pipeline")
+    graph_builder.add_edge("RAG_pipeline", END)
+    
     graph = graph_builder.compile()
 
     display(Image(graph.get_graph().draw_mermaid_png()))
