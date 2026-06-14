@@ -5,3 +5,4 @@ arxiv
 langchain-community
 langchain-experimental
 sentence-transformers
+faiss-cpu
