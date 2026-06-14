@@ -10,7 +10,7 @@ from IPython.display import Image, display
 
 from langchain_core.documents import Document
 from langchain_text_splitters import RecursiveCharacterTextSplitter
-from langchain_core.vectorstores import FAISS
+from langchain_community.vectorstores import FAISS
 
 from dotenv import load_dotenv
 load_dotenv()
@@ -19,16 +19,17 @@ from langchain_core.globals import set_debug
 set_debug(True)
 
 class State(TypedDict):
-    query: str
+    topic: str
     fetched_papers: list[dict]
-    fais_index: Any
+    question: str
+    retrieved_docs: list[Document]
 
 graph_builder = StateGraph(State)
 
 def fetch_papers(state: State) -> State:
     client = arxiv.Client()
     search = arxiv.Search(
-        query=state["query"],
+        query=state["topic"],
         max_results=10,
         sort_by=arxiv.SortCriterion.Relevance
     )
@@ -66,10 +67,19 @@ def rag_pipeline(state: State) -> State:
     chunks = splitter.split_documents(doc)
     faiss = FAISS.from_documents(chunks, embed)
     
-    return {**state, "faiss_index": faiss}
+    retriever = faiss.as_retriever(
+        search_kwargs = {"k": 5}
+        )
     
+    retrieved_docs = retriever.invoke(
+        state["question"]
+        )
     
-
+    return {
+            **state,
+            "retrieved_docs": retrieved_docs
+            }
+    
 
 if __name__ == "__main__":
     graph_builder.add_node("fetch_papers", fetch_papers)
@@ -84,9 +94,10 @@ if __name__ == "__main__":
     display(Image(graph.get_graph().draw_mermaid_png()))
 
     final_state = graph.invoke({
-    "query": "llm grooming",
+    "topic": "llm grooming",
     "fetched_papers": [],
-    "faiss_index": None
+    "question": "What is the impact of LLM grooming on model performance?"
         })
     
     print(final_state["fetched_papers"])
+    print(final_state["retrieved_docs"])
