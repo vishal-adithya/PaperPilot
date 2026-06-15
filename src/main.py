@@ -5,6 +5,8 @@ from typing import Annotated, Any
 from typing_extensions import TypedDict
 from langgraph.graph.message import add_messages
 import os
+from langchain_core.output_parsers import StrOutputParser
+from langchain_core.prompts import PromptTemplate
 from langchain_google_genai import ChatGoogleGenerativeAI
 from IPython.display import Image, display
 
@@ -19,12 +21,29 @@ from langchain_core.globals import set_debug
 set_debug(True)
 
 class State(TypedDict):
+    query: str
     topic: str
     fetched_papers: list[dict]
     question: str
     retrieved_docs: list[Document]
 
 graph_builder = StateGraph(State)
+
+def analyse_topic(state: State) -> State:
+    
+    prompt = PromptTemplate.from_template(
+        "You are research paper topic classifier and analyser. Your task is to classify the given query into a specific field of study and provide a topic name. Please provide the field of study with 1-3 words."
+        )
+    
+    llm = ChatGoogleGenerativeAI(
+            model="gemini-2.5-flash-lite",
+            temperature=0.1
+            )
+    
+    chain = prompt | llm | StrOutputParser()
+    topic = chain.invoke(state["query"])
+    return {**state, "topic": topic}
+    
 
 def fetch_papers(state: State) -> State:
     client = arxiv.Client()
@@ -84,8 +103,10 @@ def rag_pipeline(state: State) -> State:
 if __name__ == "__main__":
     graph_builder.add_node("fetch_papers", fetch_papers)
     graph_builder.add_node("RAG_pipeline", rag_pipeline)
+    graph_builder.add_node("analyse_topic", analyse_topic)
     
-    graph_builder.add_edge(START, "fetch_papers")
+    graph_builder.add_edge(START, "analyse_topic")
+    graph_builder.add_edge("analyse_topic", "fetch_papers")
     graph_builder.add_edge("fetch_papers", "RAG_pipeline")
     graph_builder.add_edge("RAG_pipeline", END)
     
