@@ -32,8 +32,8 @@ graph_builder = StateGraph(State)
 def analyse_topic(state: State) -> State:
     
     prompt = PromptTemplate.from_template(
-        "You are research paper topic classifier and analyser. Your task is to classify the given query into a specific field of study and provide a topic name. Please provide the field of study with 1-3 words."
-        )
+        template = "You are research paper topic classifier and analyser. Your task is to classify the given query into a specific field of study and provide a topic name. Please provide the field of study with 1-3 words.Context : {context}"
+    )
     
     llm = ChatGoogleGenerativeAI(
             model="gemini-2.5-flash-lite",
@@ -115,10 +115,6 @@ if __name__ == "__main__":
     display(Image(graph.get_graph().draw_mermaid_png()))
 
     final_state = graph.invoke({
-    "topic": "llm grooming",
-    "fetched_papers": [],
-    "question": "What is the impact of LLM grooming on model performance?"
+    "query": "How does reinforcement learning from human feedback improve the alignment of large language models?"
         })
-    
-    print(final_state["fetched_papers"])
-    print(final_state["retrieved_docs"])
+    print(final_state["topic"])
