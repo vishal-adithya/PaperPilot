@@ -5,6 +5,7 @@ from typing import Annotated, Any
 from typing_extensions import TypedDict
 from langgraph.graph.message import add_messages
 import os
+import json
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.prompts import PromptTemplate
 from langchain_google_genai import ChatGoogleGenerativeAI
@@ -32,19 +33,29 @@ graph_builder = StateGraph(State)
 def analyse_topic(state: State) -> State:
     
     prompt = PromptTemplate.from_template(
-        template = "You are research paper topic classifier and analyser. Your task is to classify the given query into a specific field of study and provide a topic name. Please provide the field of study with 1-3 words.Context : {context}"
-    )
+        template = """You are a research assistant. Given a user query, return a JSON with exactly these two keys:
+
+- "topic": 3-6 space-separated keywords for arXiv search, no punctuation, no full sentences
+- "question": a precise, self-contained research question answerable from academic paper abstracts. Should focus on a measurable outcome, comparison, or mechanism. Avoid vague terms like "explain" or "tell me about"
+
+Query: {query}
+
+Example output:
+{{"topic": "RLHF LLM alignment human feedback", "question": "What measurable improvements in alignment does RLHF produce in large language models compared to supervised fine-tuning?"}}
+
+Return ONLY the JSON, no markdown, no explanation.""")
     
     llm = ChatGoogleGenerativeAI(
             model="gemini-2.5-flash-lite",
             temperature=0.1
             )
     
-    chain = prompt | llm | StrOutputParser()
-    topic = chain.invoke(state["query"])
-    return {**state, "topic": topic}
-    
+    chain = prompt | llm
+    response = chain.invoke(state["query"])
 
+    parsed = json.loads(response.content)
+    return {**state, "topic": parsed["topic"], "question": parsed["question"]}
+    
 def fetch_papers(state: State) -> State:
     client = arxiv.Client()
     search = arxiv.Search(
@@ -107,7 +118,7 @@ if __name__ == "__main__":
     
     graph_builder.add_edge(START, "analyse_topic")
     graph_builder.add_edge("analyse_topic", "fetch_papers")
-    graph_builder.add_edge("fetch_papers", "RAG_pipeline")
+    graph_builder.add_edge("fetch_papers","RAG_pipeline")
     graph_builder.add_edge("RAG_pipeline", END)
     
     graph = graph_builder.compile()
@@ -118,3 +129,4 @@ if __name__ == "__main__":
     "query": "How does reinforcement learning from human feedback improve the alignment of large language models?"
         })
     print(final_state["topic"])
+    print(final_state["question"])
